@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="referrer" content="no-referrer" />
+    <title>随机图片查看器</title>
+    <style>
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        background-color: #f0f2f5;
+        margin: 0;
+        padding: 20px;
+        min-height: 100vh;
+      }
+
+      .container {
+        background: white;
+        padding: 20px;
+        border-radius: 12px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        width: 100%;
+        max-width: 800px;
+        text-align: center;
+      }
+
+      .controls {
+        margin-bottom: 20px;
+        padding: 15px;
+        background: #f8f9fa;
+        border-radius: 8px;
+      }
+
+      .radio-group {
+        margin-bottom: 15px;
+        display: flex;
+        justify-content: center;
+        gap: 15px;
+      }
+
+      .radio-group label {
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+
+      button {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 16px;
+        transition: background 0.2s;
+        margin: 0 5px;
+      }
+
+      #refresh-btn {
+        background-color: #007bff;
+        color: white;
+      }
+      #refresh-btn:hover {
+        background-color: #0056b3;
+      }
+      #refresh-btn:disabled {
+        background-color: #ccc;
+        cursor: not-allowed;
+      }
+
+      #download-btn {
+        background-color: #28a745;
+        color: white;
+        display: none; /* 初始隐藏，加载成功后显示 */
+      }
+      #download-btn:hover {
+        background-color: #218838;
+      }
+
+      .image-area {
+        margin-top: 20px;
+        min-height: 300px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        border: 2px dashed #e9ecef;
+        border-radius: 8px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      img {
+        max-width: 100%;
+        max-height: 80vh;
+        display: none; /* 初始隐藏 */
+        object-fit: contain;
+      }
+
+      .loading {
+        color: #666;
+        font-size: 18px;
+        display: none;
+      }
+
+      .error-msg {
+        color: #dc3545;
+        display: none;
+        padding: 10px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h2>随机图片获取</h2>
+
+      <div class="controls">
+        <div class="radio-group">
+          <label
+            ><input type="radio" name="r18" value="0" checked /> 非 R18
+            (正常)</label
+          >
+          <label><input type="radio" name="r18" value="1" /> R18 (开启)</label>
+          <label><input type="radio" name="r18" value="2" /> 随机混合</label>
+        </div>
+
+        <button id="refresh-btn" onclick="fetchImage()">刷新图片</button>
+        <button id="download-btn" onclick="downloadImage()">下载图片</button>
+      </div>
+
+      <div class="error-msg" id="error-msg"></div>
+
+      <div class="image-area" id="image-area">
+        <div class="loading" id="loading">加载中...</div>
+        <img
+          id="display-img"
+          alt="Random Image"
+          onload="onImageLoad()"
+          onerror="onImageError()"
+        />
+      </div>
+    </div>
+
+    <script>
+      // 原 API 地址
+      const originalApiUrl = "https://api.lolicon.app/setu/v2";
+
+      // --- 修改点 1：定义代理服务器前缀 ---
+      // 使用 corsproxy.io 代理来绕过 CORS 限制
+      // 原理：你的网页 -> 代理服务器 -> 目标API -> 代理服务器(加上允许头) -> 你的网页
+      const proxyUrl = "https://corsproxy.io/?";
+
+      const displayImg = document.getElementById("display-img");
+      const loadingText = document.getElementById("loading");
+      const errorMsg = document.getElementById("error-msg");
+      const downloadBtn = document.getElementById("download-btn");
+      const refreshBtn = document.getElementById("refresh-btn");
+
+      let currentImageUrl = "";
+
+      window.onload = fetchImage;
+
+      async function fetchImage() {
+        loadingText.style.display = "block";
+        displayImg.style.display = "none";
+        errorMsg.style.display = "none";
+        downloadBtn.style.display = "none";
+        refreshBtn.disabled = true;
+
+        const r18Value = document.querySelector(
+          'input[name="r18"]:checked',
+        ).value;
+
+        try {
+          // --- 修改点 2：构造经过代理的 URL ---
+          // 目标完整链接
+          const targetUrl = `${originalApiUrl}?r18=${r18Value}`;
+          // 最终请求链接：代理地址 + 目标地址
+          // 注意：这里直接拼接即可，corsproxy.io 会自动处理
+          const finalRequestUrl = proxyUrl + encodeURIComponent(targetUrl);
+
+          console.log("正在请求:", finalRequestUrl); // 方便调试
+
+          const response = await fetch(finalRequestUrl);
+
+          // 检查响应状态
+          if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+          }
+
+          const json = await response.json();
+
+          if (json.data && json.data.length > 0) {
+            const imgData = json.data[0];
+            currentImageUrl = imgData.urls.original;
+
+            // 这里为了保险，可以把图片链接也通过代理加载（部分图床也防跨域）
+            // 但通常 i.pixiv.re 只需要 meta referrer 即可，不需要代理
+            // 如果图片显示不出来，可以尝试：displayImg.src = proxyUrl + encodeURIComponent(currentImageUrl);
+            displayImg.src = currentImageUrl;
+          } else {
+            // 如果 API 返回空数据（有时候 API 会抽风或者没图了）
+            let msg = "未获取到图片数据";
+            if (json.error) msg += `: ${json.error}`;
+            showError(msg);
+            resetUI();
+          }
+        } catch (error) {
+          console.error("API Error:", error);
+          showError(
+            `请求失败: ${error.message} (可能是代理服务繁忙或 API 限制)`,
+          );
+          resetUI();
+        }
+      }
+
+      function onImageLoad() {
+        loadingText.style.display = "none";
+        displayImg.style.display = "block";
+        downloadBtn.style.display = "inline-block";
+        refreshBtn.disabled = false;
+      }
+
+      function onImageError() {
+        showError("图片加载失败，请尝试刷新");
+        resetUI();
+      }
+
+      function resetUI() {
+        loadingText.style.display = "none";
+        refreshBtn.disabled = false;
+      }
+
+      function showError(msg) {
+        errorMsg.textContent = msg;
+        errorMsg.style.display = "block";
+      }
+
+      async function downloadImage() {
+        if (!currentImageUrl) return;
+        const btnOriginalText = downloadBtn.textContent;
+        downloadBtn.textContent = "下载中...";
+        downloadBtn.disabled = true;
+
+        try {
+          // 下载时，为了避免跨域导致无法保存，我们也走一下代理
+          // 这样能确保拿到 Blob 数据
+          const downloadProxyUrl =
+            proxyUrl + encodeURIComponent(currentImageUrl);
+
+          const response = await fetch(downloadProxyUrl);
+          if (!response.ok) throw new Error("Network response was not ok");
+
+          const blob = await response.blob();
+          const blobUrl = window.URL.createObjectURL(blob);
+
+          const a = document.createElement("a");
+          a.href = blobUrl;
+          // 尝试从 URL 拿文件名，拿不到就用默认的
+          const fileName =
+            currentImageUrl.split("/").pop() || `setu_${Date.now()}.png`;
+          a.download = fileName;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          window.URL.revokeObjectURL(blobUrl);
+        } catch (error) {
+          console.warn("Blob download failed:", error);
+          window.open(currentImageUrl, "_blank");
+          alert("自动下载失败（跨域限制），已在新窗口打开，请手动保存。");
+        } finally {
+          downloadBtn.textContent = btnOriginalText;
+          downloadBtn.disabled = false;
+        }
+      }
+    </script>
+  </body>
+</html>

@@ -1,0 +1,14 @@
+{
+  "llm_provider": {
+    "description": "LLM提供商",
+    "type": "string",
+    "hint": "选择用于处理日程请求的LLM提供商",
+    "_special": "select_provider"
+  },
+  "enable_personality": {
+    "description": "启用人格化回复",
+    "type": "bool",
+    "hint": "是否使用人格设定来生成更自然的回复",
+    "default": true
+  }
+}
