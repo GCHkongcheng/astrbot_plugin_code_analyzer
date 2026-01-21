@@ -110,9 +110,6 @@ class MyPlugin(Star):
 """
         
         try:
-            # 发送提示消息
-            yield event.plain_result("正在分析代码，请稍候...")
-            
             # 调用LLM进行分析
             logger.info("开始调用LLM进行代码分析")
             response = await provider.text_chat(prompt=analysis_prompt)
